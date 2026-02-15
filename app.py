@@ -7,11 +7,63 @@ import os
 # --- 1. 網頁基礎配置 ---
 st.set_page_config(page_title="SongMate Web", page_icon="🎧", layout="wide")
 
+# 自定義 CSS (黑白灰色調)
 st.markdown("""
     <style>
-    .stApp { background-color: #fcfcfc; }
-    .stButton>button { border-radius: 8px; background-color: #0078d4; color: white; border: none; }
-    .stButton>button:hover { background-color: #005a9e; }
+    /* 整體背景與字體 */
+    .stApp { background-color: #ffffff; color: #1a1a1a; }
+    
+    /* 側邊欄樣式 */
+    section[data-testid="stSidebar"] {
+        background-color: #f8f9fa !important;
+        border-right: 1px solid #e0e0e0;
+    }
+    
+    /* 按鈕樣式：黑色底、白色字 */
+    .stButton>button { 
+        border-radius: 4px; 
+        background-color: #1a1a1a; 
+        color: #ffffff; 
+        width: 100%;
+        border: 1px solid #1a1a1a;
+        transition: 0.2s;
+        font-weight: 500;
+    }
+    .stButton>button:hover { 
+        background-color: #404040; 
+        border-color: #404040;
+        color: #ffffff;
+    }
+    .stButton>button:active {
+        background-color: #000000;
+        color: #ffffff;
+    }
+
+    /* 輸入框與選擇框樣式 */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input {
+        border-radius: 4px;
+        border: 1px solid #cccccc;
+    }
+
+    /* 卡片感容器 */
+    .song-item {
+        padding: 15px;
+        border-bottom: 1px solid #eeeeee;
+        margin-bottom: 5px;
+    }
+
+    /* 連結顏色：深灰色 */
+    a { color: #555555 !important; text-decoration: underline; }
+    
+    /* 下載按鈕樣式（特殊處理） */
+    div[data-testid="stDownloadButton"] > button {
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
+        border: 1px solid #1a1a1a !important;
+    }
+    div[data-testid="stDownloadButton"] > button:hover {
+        background-color: #f0f0f0 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -26,21 +78,22 @@ def load_data():
 def save_data(df):
     df.to_excel(DB_FILE, index=False)
 
-# 初始化資料
 if 'library_df' not in st.session_state:
     st.session_state.library_df = load_data()
 
 # --- 3. 側邊導覽 ---
 with st.sidebar:
-    st.title("🎧 SongMate")
-    menu = st.radio("功能選單", ["📁 更新歌庫", "🎲 抽歌工具", "🔍 查詢與修改"])
+    st.title("SONGMATE")
+    st.caption("Minimalist Music Tool")
+    menu = st.radio("MENU", ["📁 更新歌庫", "🎲 抽歌工具", "🔍 查詢與修改"])
+    st.divider()
     if st.session_state.library_df is not None:
-        st.success(f"歌庫內共有 {len(st.session_state.library_df)} 筆")
+        st.write(f"總計資料: {len(st.session_state.library_df)}")
 
 # --- 4. 功能：更新歌庫 ---
 if menu == "📁 更新歌庫":
-    st.header("更新歌庫")
-    uploaded_file = st.file_uploader("請選擇 Excel", type=['xlsx'])
+    st.header("Upload Library")
+    uploaded_file = st.file_uploader("Select Excel File", type=['xlsx'])
     if uploaded_file:
         try:
             df_raw = pd.read_excel(uploaded_file)
@@ -51,56 +104,59 @@ if menu == "📁 更新歌庫":
                 new_data['play_count'] = 0
                 new_data['last_played'] = "從未播放"
                 st.dataframe(new_data, use_container_width=True)
-                if st.button("確認匯入並存入伺服器"):
+                if st.button("CONFIRM & SAVE"):
                     save_data(new_data)
                     st.session_state.library_df = new_data
-                    st.success("✅ 匯入成功！")
+                    st.success("Library updated.")
+            else:
+                st.error("Column mismatch.")
         except Exception as e:
-            st.error(f"錯誤：{e}")
+            st.error(f"Error: {e}")
 
-# --- 5. 功能：抽歌工具 (權重算法核心) ---
+# --- 5. 功能：抽歌工具 ---
 elif menu == "🎲 抽歌工具":
-    st.header("抽歌工具")
+    st.header("Draw Songs")
     if st.session_state.library_df is None:
-        st.warning("⚠️ 請先上傳歌庫")
+        st.warning("Please upload library first.")
     else:
         tomorrow = datetime.datetime.today() + datetime.timedelta(days=1)
         gender_today = "男" if tomorrow.day % 2 == 0 else "女"
-        st.info(f"📅 明日 ({tomorrow.strftime('%m/%d')}) 是 **{gender_today}日**")
-        num_to_draw = st.number_input("預計抽出數量", 1, 20, 3)
+        st.write(f"📅 明日：**{tomorrow.strftime('%Y/%m/%d')}** | 性別：**{gender_today}**")
+        
+        num_to_draw = st.number_input("Count", 1, 20, 3)
 
-        if st.button("🔥 開始加權抽歌", type="primary"):
+        if st.button("EXECUTE DRAW", type="primary"):
             df = st.session_state.library_df.copy()
             pool = df[df['gender'] == gender_today].copy()
             if pool.empty:
-                st.error(f"❌ 沒有 {gender_today} 性的歌曲")
+                st.error(f"No songs for gender: {gender_today}")
             else:
-                # 權重算法：播放次數愈多，中獎率愈低
                 pool['weight'] = 1 / (pool['play_count'] + 1)
                 selected = pool.sample(n=min(len(pool), int(num_to_draw)), weights='weight')
                 
-                # 自動增加這幾首歌的播放次數
+                # 更新次數
                 for idx in selected.index:
                     st.session_state.library_df.at[idx, 'play_count'] += 1
                     st.session_state.library_df.at[idx, 'last_played'] = datetime.datetime.now().strftime("%Y-%m-%d")
-                
-                # 存檔以保存次數更新
                 save_data(st.session_state.library_df)
 
-                st.write("### 🎶 抽籤結果")
+                st.write("### Result")
+                output_text = f"🎶 Playlist ({tomorrow.strftime('%m/%d')})\n"
                 for i, row in enumerate(selected.itertuples(), 1):
-                    st.markdown(f"**{i}. {row.title}** — {row.requester} (已播放 {row.play_count} 次)")
-                    if pd.notna(row.link): st.caption(f"🔗 [點我播放]({row.link})")
+                    st.markdown(f"**{i}. {row.title}** — {row.requester}")
+                    if pd.notna(row.link): st.caption(f"🔗 [Link]({row.link})")
+                    st.divider()
+                    output_text += f"{i}. {row.title} — {row.requester}\n"
                 
-                st.success("✅ 抽歌完成，播放次數已自動 +1")
+                st.download_button("Download Playlist (.txt)", output_text, f"playlist_{tomorrow.strftime('%m%d')}.txt")
 
-# --- 6. 功能：查詢與修改 (新增修改次數功能) ---
+# --- 6. 功能：查詢與修改 ---
 elif menu == "🔍 查詢與修改":
-    st.header("查詢與手動修改")
+    st.header("Search & Modify")
     if st.session_state.library_df is None:
-        st.warning("⚠️ 請先上傳歌庫")
+        st.warning("Please upload library.")
     else:
-        search_name = st.text_input("搜尋姓名或歌名：")
+        search_name = st.text_input("Search by name or title:")
         df = st.session_state.library_df
         
         if search_name:
@@ -108,18 +164,15 @@ elif menu == "🔍 查詢與修改":
                         (df['title'].str.contains(search_name, na=False))]
             
             if not results.empty:
-                st.write("請選擇要修改的歌曲：")
                 for idx, row in results.iterrows():
-                    col1, col2, col3 = st.columns([3, 1, 1])
-                    col1.write(f"🎵 {row['title']} ({row['requester']})")
-                    # 使用 number_input 讓使用者修改次數
-                    new_count = col2.number_input(f"次數", min_value=0, value=int(row['play_count']), key=f"n_{idx}")
-                    if col3.button("更新", key=f"b_{idx}"):
+                    col1, col2, col3 = st.columns([4, 1, 1])
+                    col1.write(f"**{row['title']}** ({row['requester']})")
+                    new_count = col2.number_input(f"Times", min_value=0, value=int(row['play_count']), key=f"n_{idx}")
+                    if col3.button("Update", key=f"b_{idx}"):
                         st.session_state.library_df.at[idx, 'play_count'] = new_count
                         save_data(st.session_state.library_df)
-                        st.success(f"已更新《{row['title']}》為 {new_count} 次")
+                        st.success("Updated.")
                         st.rerun()
                 st.divider()
-                st.dataframe(results[['requester', 'gender', 'title', 'play_count']], use_container_width=True)
             else:
-                st.write("找不到相關記錄")
+                st.write("No records found.")
