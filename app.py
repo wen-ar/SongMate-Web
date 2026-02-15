@@ -2,94 +2,130 @@ import streamlit as st
 import pandas as pd
 import datetime
 import numpy as np
-import io
 
-# --- 頁面配置 ---
-st.set_page_config(page_title="SongMate Web", page_icon="🎧", layout="centered")
+# --- 1. 網頁基礎配置 ---
+st.set_page_config(
+    page_title="SongMate Web - 點歌助手",
+    page_icon="🎧",
+    layout="wide"
+)
 
-# 自定義 CSS 讓介面更像 WinUI
+# 自定義 CSS 美化 (WinUI 風格)
 st.markdown("""
     <style>
     .stApp { background-color: #fcfcfc; }
-    .stButton>button { border-radius: 8px; height: 3em; background-color: #0078d4; color: white; border: none; }
-    .stButton>button:hover { background-color: #005a9e; color: white; }
-    div[data-testid="stExpander"] { border-radius: 10px; border: 1px solid #e0e0e0; }
+    .stButton>button { 
+        border-radius: 8px; 
+        background-color: #0078d4; 
+        color: white; 
+        width: 100%;
+        border: none;
+        transition: 0.3s;
+    }
+    .stButton>button:hover { background-color: #005a9e; border: none; }
+    .song-card {
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        background-color: white;
+        margin-bottom: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🎧 SongMate 點歌助手")
-
-# 使用 Session State 模擬資料庫儲存 (注意：Render 重啟後會重置)
+# --- 2. 狀態管理 ---
 if 'library_df' not in st.session_state:
     st.session_state.library_df = None
 
-tabs = st.tabs(["📁 更新歌庫", "🎲 抽歌工具"])
+# --- 3. 側邊導覽列 ---
+with st.sidebar:
+    st.title("🎧 SongMate")
+    st.write("版本：Web 1.0 (Render)")
+    menu = st.radio("功能選單", ["📁 更新歌庫", "🎲 抽歌工具", "🔍 查詢記錄"])
+    st.divider()
+    st.caption("提示：Render 免費版若重啟，資料需重新上傳。")
 
-# --- Tab 1: 更新歌庫 ---
-with tabs[0]:
-    st.subheader("匯入點歌單")
-    uploaded_file = st.file_uploader("選擇 Excel 檔案 (需包含: 姓名, 性別, 歌名)", type=['xlsx'])
+# --- 4. 功能邏輯：更新歌庫 ---
+if menu == "📁 更新歌庫":
+    st.header("更新歌庫")
+    uploaded_file = st.file_uploader("請選擇『線上點歌.xlsx』", type=['xlsx'])
     
     if uploaded_file:
         try:
-            # 讀取上傳的檔案
-            new_data = pd.read_excel(uploaded_file)
-            # 統一欄位名稱 (對應你原本的邏輯)
-            # 假設原始 Excel 欄位為: 姓名, 性別, 歌名
-            new_data.columns = ['requester', 'gender', 'title'] 
+            df_raw = pd.read_excel(uploaded_file)
             
-            st.write("📋 預覽上傳內容：")
-            st.dataframe(new_data, use_container_width=True)
+            # 定義需要的欄位，排除「填寫時間」、「Email」與「ID」
+            target_cols = {
+                "姓名": "requester",
+                "性別": "gender",
+                "歌名": "title",
+                "歌曲連結": "link"
+            }
             
-            if st.button("確認更新至歌庫"):
-                # 初始化播放次數與日期
+            if all(col in df_raw.columns for col in target_cols.keys()):
+                # 提取並重命名
+                new_data = df_raw[list(target_cols.keys())].copy()
+                new_data.rename(columns=target_cols, inplace=True)
+                
+                # 初始化播放次數
                 new_data['play_count'] = 0
                 new_data['last_played'] = "從未播放"
-                st.session_state.library_df = new_data
-                st.success("✅ 歌庫已更新！(暫存於記憶體中)")
+                
+                st.write("✅ **偵測成功！預覽資料如下：**")
+                st.dataframe(new_data, use_container_width=True)
+                
+                if st.button("確認匯入歌庫"):
+                    st.session_state.library_df = new_data
+                    st.success(f"成功匯入 {len(new_data)} 筆點歌資料！")
+            else:
+                st.error(f"❌ 檔案欄位不匹配。請確保包含：{', '.join(target_cols.keys())}")
         except Exception as e:
-            st.error(f"讀取失敗：{e}")
+            st.error(f"讀取出錯：{e}")
 
-# --- Tab 2: 抽歌工具 ---
-with tabs[1]:
+# --- 5. 功能邏輯：抽歌工具 ---
+elif menu == "🎲 抽歌工具":
+    st.header("抽歌工具")
+    
     if st.session_state.library_df is None:
-        st.warning("⚠️ 請先前往「更新歌庫」上傳資料。")
+        st.warning("⚠️ 請先前往『更新歌庫』上傳 Excel 檔案。")
     else:
-        st.subheader("開始隨機抽歌")
-        
-        # 1. 判斷性別邏輯 (複用原本 draw_widget.py)
+        # 性別判斷邏輯
         tomorrow = datetime.datetime.today() + datetime.timedelta(days=1)
-        # 假設: 偶數日抽男, 奇數日抽女
         gender_today = "男" if tomorrow.day % 2 == 0 else "女"
         
-        st.info(f"📅 明日日期：{tomorrow.strftime('%Y-%m-%d')} ({gender_today}日)")
+        st.info(f"📅 明日 ({tomorrow.strftime('%m/%d')}) 是 **{gender_today}日**")
         
-        num_to_draw = st.number_input("預計抽出數量", min_value=1, max_value=20, value=3)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            num_to_draw = st.number_input("預計抽出數量", 1, 20, 3)
         
-        if st.button("🔥 執行抽歌", type="primary"):
+        if st.button("🔥 開始加權抽歌", type="primary"):
             df = st.session_state.library_df.copy()
             
-            # 2. 篩選性別
+            # 篩選性別
             pool = df[df['gender'] == gender_today].copy()
             
             if pool.empty:
-                st.error(f"❌ 歌庫中沒有 {gender_today} 性的歌曲！")
+                st.error(f"❌ 歌庫中目前沒有 {gender_today} 性的歌曲。")
             else:
-                # 3. 權重算法: 1 / (播放次數 + 1)
+                # 權重算法: 次數愈少機率愈高
                 pool['weight'] = 1 / (pool['play_count'] + 1)
                 
-                # 執行加權隨機抽樣
                 sample_size = min(len(pool), int(num_to_draw))
                 selected = pool.sample(n=sample_size, weights='weight')
                 
-                st.write("### 🎶 今日播放清單")
-                for i, row in enumerate(selected.itertuples(), 1):
-                    # 顯示結果
-                    st.markdown(f"**{i}. {row.title}** — {row.requester}")
+                st.write("### 🎶 抽籤結果")
                 
-                # 4. 產生下載連結 (替代原本的自動存檔)
                 output_text = f"🎶 播放清單（{gender_today}日）\n"
+                
                 for i, row in enumerate(selected.itertuples(), 1):
+                    with st.container():
+                        st.markdown(f"**{i}. {row.title}** — {row.requester}")
+                        if pd.notna(row.link) and str(row.link).startswith('http'):
+                            st.caption(f"🔗 [點我播放歌曲]({row.link})")
+                        else:
+                            st.caption("🔗 (無有效連結)")
+                        st.divider()
                     output_text += f"{i}. {row.title} — {row.requester}\n"
                 
                 st.download_button(
@@ -99,3 +135,19 @@ with tabs[1]:
                     mime="text/plain"
                 )
                 st.balloons()
+
+# --- 6. 功能邏輯：查詢記錄 ---
+elif menu == "🔍 查詢記錄":
+    st.header("查詢點歌記錄")
+    if st.session_state.library_df is None:
+        st.warning("⚠️ 請先上傳歌庫。")
+    else:
+        search_name = st.text_input("輸入姓名搜尋：")
+        if search_name:
+            df = st.session_state.library_df
+            results = df[df['requester'].str.contains(search_name, na=False)]
+            if not results.empty:
+                st.write(f"🎤 {search_name} 點過的歌曲：")
+                st.table(results[['title', 'gender', 'play_count']])
+            else:
+                st.write("😅 找不到相關記錄。")
