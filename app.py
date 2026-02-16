@@ -7,49 +7,55 @@ import os
 # --- 1. 網頁基礎配置 ---
 st.set_page_config(page_title="SongMate Web - 點歌助手", page_icon="🎧", layout="wide")
 
-# 自定義 CSS (極簡黑白灰色調)
 st.markdown("""
     <style>
-    /* 整體背景與字體 */
-    .stApp { background-color: #ffffff; color: #1a1a1a; }
+    /* 引入更漂亮的字體 */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;500;700&display=swap');
     
-    /* 側邊欄樣式 */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fa !important;
-        border-right: 1px solid #e0e0e0;
+    html, body, [class*="css"] {
+        font-family: 'Noto Sans TC', sans-serif;
+        background-color: #fafafa;
     }
+
+    /* 讓側邊欄更有設計感 */
+    section[data-testid="stSidebar"] {
+        background-color: #1a1a1a !important;
+        color: white !important;
+    }
+    section[data-testid="stSidebar"] .stWrite { color: #888888; }
     
-    /* 按鈕樣式：黑色底、白色字 */
+    /* 讓卡片浮起來 */
+    .stDataFrame, .stTable, div[data-testid="stExpander"] {
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border-radius: 12px !important;
+        background-color: white;
+    }
+
+    /* 按鈕進化：加入微小的位移效果 */
     .stButton>button { 
-        border-radius: 4px; 
-        background-color: #1a1a1a; 
+        height: 3.5em;
+        border-radius: 10px; 
+        background-color: #000000; 
         color: #ffffff; 
-        width: 100%;
-        border: 1px solid #1a1a1a;
-        transition: 0.2s;
-        font-weight: 500;
-        height: 3em;
+        border: none;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .stButton>button:hover { 
-        background-color: #404040; 
-        border-color: #404040;
-        color: #ffffff;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+        background-color: #333333;
     }
 
-    /* 數字與文字輸入框 */
-    .stTextInput>div>div>input, .stNumberInput>div>div>input {
-        border-radius: 4px;
-        border: 1px solid #cccccc;
-    }
-
-    /* 連結顏色：深灰色 */
-    a { color: #555555 !important; text-decoration: underline; }
-    
-    /* 下載按鈕樣式 */
-    div[data-testid="stDownloadButton"] > button {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border: 1px solid #1a1a1a !important;
+    /* 抽籤結果的強調顯示 */
+    .result-card {
+        background: linear-gradient(145deg, #ffffff, #f0f0f0);
+        padding: 20px;
+        border-left: 5px solid #000;
+        border-radius: 8px;
+        margin: 10px 0;
     }
     </style>
     """, unsafe_allow_html=True)
